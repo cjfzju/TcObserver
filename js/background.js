@@ -12,8 +12,8 @@ function requestUrl(url, callback) {
 function process(html) {
     var dom = parseToDOM(html);
     var contests = $(dom).find('.stat').find('tr :gt(1)');
-    var curTime;
-    for (var i=0; i<contests.length; i++) {
+    var lastTime = localStorage.getItem('lastTime');
+    for (var i=0; i<Math.min(3, contests.length); i++) {
         var ct = contests[i];
         var a = $(ct).find('a')[0];
         var time = $.trim(ct.children[6].innerHTML);
@@ -29,16 +29,17 @@ function process(html) {
                 minute: time.substr(17,2)
             }
         }
-        if (isNew(contestInfo.time)) notifyContestInfo(contestInfo);
+        if (isNew(contestInfo.time, lastTime)){
+            notifyContestInfo(contestInfo);
+            if (i == 0) localStorage.setItem('lastTime', JSON.stringify(contestInfo.time));
+     //       $.delay(100);
+        }
         else break;
-        if (i == 0) curTime = contestInfo.time;
     }
-    if (i > 0) localStorage.setItem('lastTime', JSON.stringify(curTime));
 }
 
 // 判断时间是否为新
-function isNew(time) {
-    var lastTime = localStorage.getItem('lastTime');
+function isNew(time, lastTime) {
     if (lastTime == null) {
         return true;
     } else {
@@ -51,13 +52,37 @@ function isNew(time) {
     }
 }
 function notifyContestInfo(contestInfo){
-//    $('#info')[0].innerHTML='good';
     var notification = webkitNotifications.createNotification(
         'img/icon.png',  // icon url - can be relative
-        'new!',  // notification title
+        contestInfo.price,  // notification title
         contestInfo.des
     );
     notification.show();
+}
+
+
+
+function notifyContestInfo2(contestInfo){
+    var notifUrl = chrome.extension.getURL('background.html');
+    // Look through all the pages in this extension to find one we can use.
+    var views = chrome.extension.getViews();
+    $('#log')[0].innerHTML=notifUrl+'\n'+views[0].location.href;
+
+    for (var i = 0; i < views.length; i++) {
+        var view = views[i];
+        // If this view has the right URL and hasn't been used yet...
+        if (view.location.href == notifUrl) {
+            view.document.getElementById('content').href = contestInfo.url;
+            view.document.getElementById('content').innerHTML = contestInfo.des;
+            view.document.getElementById('title').innerHTML = '<b>'+contestInfo.price+'</b>';
+            var notification = webkitNotifications.createHTMLNotification(
+                  'background.html'  // html url - can be relative
+            );
+            notification.show();
+            break;
+        }
+    }
+
 }
 
 function parseToDOM(str){
@@ -76,16 +101,7 @@ function start() {
 
 (function($){
 		$(document).ready(function(){
-		        if (!localStorage.getItem('lastTime')) {
-		            time = {
-                        year: 2013,
-                        month: 06,
-                        day: 26,
-                        hour: 6,
-                        minute: 54
-                    };
-                    localStorage.setItem('lastTime', JSON.stringify(time));
-                }
+		        localStorage.clear();
 		        start();
 		});
 })(jQuery);
